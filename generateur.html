@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🧭 Générateur de prompts de planification</title>
+
+  <!--
+    Outil 100 % local — destiné à la fonction publique.
+    RGPD / privacy by design : aucune dépendance, aucun CDN, aucune requête réseau,
+    aucun stockage distant. Tout reste dans le navigateur. Rien n'est jamais transmis.
+    Un seul fichier HTML autonome (HTML + CSS + JS vanilla), zéro build.
+  -->
+
+  <style>
+    :root {
+      --accent:   #2563eb;
+      --accent-h: #1d4ed8;
+      --ok:       #16a34a;
+      --warn:     #d97706;
+      --err:      #dc2626;
+      --bg:       #f8fafc;
+      --surface:  #ffffff;
+      --border:   #e2e8f0;
+      --text:     #1e293b;
+      --muted:    #64748b;
+      --radius:   10px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    [hidden] { display: none !important; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 1.5rem 1rem;
+      line-height: 1.5;
+    }
+    .app { max-width: 1280px; margin: 0 auto; }
+
+    /* ---- En-tête ---- */
+    header { text-align: center; margin-bottom: 1.25rem; }
+    header h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: .4rem; }
+    .confidentialite {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: #f0fdf4; color: var(--ok);
+      border: 1px solid #bbf7d0; border-radius: 20px;
+      font-size: .8rem; padding: .3rem .9rem;
+    }
+
+    /* ---- Disposition 3 colonnes : Paramètres | Skills | Aperçu ---- */
+    .grille {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr) minmax(0, 1.25fr);
+      gap: 1.25rem;
+      align-items: start;
+    }
+    .panneau {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .panneau-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: .5rem;
+      padding: .7rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: #f8fafc;
+    }
+    .panneau-header h2 { font-size: .95rem; font-weight: 600; }
+    .panneau-corps { padding: 1rem; }
+
+    /* ---- Groupes de paramètres ---- */
+    fieldset { border: none; margin-bottom: 1rem; }
+    fieldset legend {
+      font-size: .72rem; font-weight: 600; letter-spacing: .04em;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: .5rem;
+    }
+    .segmente { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .segmente label {
+      cursor: pointer; padding: .35rem .9rem; font-size: .85rem;
+      background: var(--surface); transition: background .15s, color .15s;
+    }
+    .segmente label:not(:last-child) { border-right: 1px solid var(--border); }
+    .segmente input { position: absolute; opacity: 0; pointer-events: none; }
+    .segmente input:checked + span { color: #fff; }
+    .segmente label:has(input:checked) { background: var(--accent); color: #fff; }
+    .segmente label:has(input:focus-visible) { outline: 2px solid var(--accent-h); outline-offset: -2px; }
+
+    /* ---- Cases à cocher (noyau + modules) ---- */
+    .liste-options { list-style: none; }
+    .option {
+      display: flex; align-items: flex-start; gap: .55rem;
+      padding: .45rem 0;
+      border-bottom: 1px dashed var(--border);
+    }
+    .option:last-child { border-bottom: none; }
+    .option input[type="checkbox"] { margin-top: .2rem; flex-shrink: 0; width: 1rem; height: 1rem; cursor: pointer; }
+    .option input:disabled { cursor: default; }
+    .option-corps { flex: 1; min-width: 0; }
+    .option-nom { font-size: .88rem; font-weight: 600; }
+    .option-desc { font-size: .76rem; color: var(--muted); margin-top: .1rem; }
+    .option.verrou .option-nom { color: var(--muted); }
+    .badge-noyau {
+      display: inline-block; font-size: .64rem; font-weight: 700;
+      background: #eff6ff; color: var(--accent); border-radius: 10px;
+      padding: .05rem .45rem; margin-left: .35rem; vertical-align: middle;
+      letter-spacing: .03em;
+    }
+
+    /* ---- Sous-options (catalogue skills, graphify) ---- */
+    .sous-options {
+      list-style: none; margin: .4rem 0 .2rem 1.6rem;
+      padding-left: .6rem; border-left: 2px solid var(--border);
+    }
+    .sous-options .option { padding: .3rem 0; border-bottom: none; }
+    .sous-options .option-nom { font-weight: 500; }
+    .lien-skill { color: var(--accent); font-size: .74rem; text-decoration: none; word-break: break-all; }
+    .lien-skill:hover { text-decoration: underline; }
+    .url-attente { font-size: .72rem; color: var(--warn); font-style: italic; }
+
+    /* ---- Panneau Skills ---- */
+    .skills-hint {
+      font-size: .78rem; color: #854d0e;
+      background: #fffbeb; border: 1px solid #fde047; border-radius: 8px;
+      padding: .5rem .7rem; margin-bottom: .9rem;
+    }
+    .skills-vide { font-size: .78rem; color: var(--muted); font-style: italic; padding: .2rem 0; }
+
+    /* ---- Aperçu ---- */
+    .compteur {
+      display: inline-flex; align-items: center; gap: .35rem;
+      font-size: .8rem; font-weight: 600;
+      padding: .25rem .7rem; border-radius: 20px;
+    }
+    .compteur.ok   { background: #f0fdf4; color: var(--ok);   }
+    .compteur.warn { background: #fffbeb; color: var(--warn); }
+    .compteur.err  { background: #fef2f2; color: var(--err);  }
+    .apercu-pre {
+      background: #f8fafc;
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 1rem;
+      font-family: 'Consolas', 'Fira Mono', monospace;
+      font-size: .82rem; line-height: 1.6;
+      white-space: pre-wrap; word-break: break-word;
+      min-height: 240px; max-height: 60vh; overflow: auto;
+      color: var(--text);
+    }
+    .barre-actions { display: flex; gap: .5rem; margin-top: .8rem; flex-wrap: wrap; }
+
+    /* ---- Boutons ---- */
+    .btn {
+      display: inline-flex; align-items: center; gap: .35rem;
+      border: none; border-radius: 6px;
+      padding: .45rem .9rem; font-size: .82rem; font-weight: 500;
+      cursor: pointer; transition: background .15s, opacity .15s;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: .4; cursor: default; }
+    .btn-primaire  { background: var(--accent); color: #fff; }
+    .btn-primaire:hover:not(:disabled) { background: var(--accent-h); }
+    .btn-secondaire { background: #f1f5f9; color: var(--text); border: 1px solid var(--border); }
+    .btn-secondaire:hover:not(:disabled) { background: #e2e8f0; }
+
+    /* ---- Responsive (utilisable à 380 px) ---- */
+    @media (max-width: 1040px) {
+      .grille { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      header h1 { font-size: 1.2rem; }
+      .panneau-corps { padding: .85rem; }
+      .panneau-header { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- En-tête -->
+  <header>
+    <h1>🧭 Générateur de prompts de planification</h1>
+    <p class="confidentialite">🔒 100 % local — aucune donnée envoyée. Conforme RGPD (privacy by design).</p>
+  </header>
+
+  <div class="grille">
+
+    <!-- ============ COLONNE PARAMÈTRES ============ -->
+    <section class="panneau" aria-label="Paramètres">
+      <div class="panneau-header"><h2>⚙️ Paramètres</h2></div>
+      <div class="panneau-corps">
+
+        <fieldset>
+          <legend>Cible</legend>
+          <div class="segmente" role="radiogroup" aria-label="Cible">
+            <label><input type="radio" name="cible" value="code" checked><span>Claude Code</span></label>
+            <label><input type="radio" name="cible" value="chat"><span>Claude chat</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Structure</legend>
+          <div class="segmente" role="radiogroup" aria-label="Structure">
+            <label><input type="radio" name="structure" value="mono"><span>Mono-fichier</span></label>
+            <label><input type="radio" name="structure" value="modulaire" checked><span>Modulaire</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Envergure du projet</legend>
+          <div class="segmente" role="radiogroup" aria-label="Envergure du projet">
+            <label><input type="radio" name="envergure" value="court" checked><span>Court</span></label>
+            <label><input type="radio" name="envergure" value="moyen"><span>Moyen</span></label>
+            <label><input type="radio" name="envergure" value="long"><span>Long terme</span></label>
+          </div>
+          <p class="option-desc" style="margin-top:.4rem;">Pré-coche les modules adaptés (Court : noyau seul · Moyen : structure + sécurité · Long : + gouvernance &amp; web). Modifiable ensuite.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Mode de génération</legend>
+          <div class="segmente" role="radiogroup" aria-label="Mode de génération">
+            <label><input type="radio" name="mode" value="blocs" checked><span>Blocs activables</span></label>
+            <label><input type="radio" name="mode" value="complet"><span>Prompt complet</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Langue du prompt</legend>
+          <div class="segmente" role="radiogroup" aria-label="Langue du prompt">
+            <label><input type="radio" name="langue" value="fr" checked><span>FR</span></label>
+            <label><input type="radio" name="langue" value="en"><span>EN</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Format</legend>
+          <div class="segmente" role="radiogroup" aria-label="Format">
+            <label><input type="radio" name="format" value="texte" checked><span>Texte structuré</span></label>
+            <label><input type="radio" name="format" value="xml"><span>XML</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Noyau — toujours présent</legend>
+          <ul class="liste-options" id="noyau-list"></ul>
+        </fieldset>
+
+        <fieldset>
+          <legend>Modules activables</legend>
+          <ul class="liste-options" id="modules-list"></ul>
+        </fieldset>
+
+      </div>
+    </section>
+
+    <!-- ============ COLONNE SKILLS ============ -->
+    <section class="panneau" aria-label="Skills">
+      <div class="panneau-header"><h2>🧩 Skills</h2></div>
+      <div class="panneau-corps">
+        <p class="skills-hint" id="skills-hint" hidden>
+          ⚠️ Des skills sont cochés, mais le module « Skills » est décoché dans les Paramètres :
+          cochez-le pour les inclure au prompt.
+        </p>
+        <fieldset>
+          <legend>Skills perso</legend>
+          <ul class="liste-options" id="skills-perso"></ul>
+          <p class="skills-vide" id="vide-perso" hidden>Aucun skill perso pour cette combinaison.</p>
+        </fieldset>
+        <fieldset style="margin-bottom:0;">
+          <legend>Skills populaires (GitHub)</legend>
+          <ul class="liste-options" id="skills-populaire"></ul>
+          <p class="skills-vide" id="vide-populaire" hidden>Aucun skill populaire pour cette combinaison.</p>
+        </fieldset>
+      </div>
+    </section>
+
+    <!-- ============ COLONNE APERÇU ============ -->
+    <section class="panneau" aria-label="Aperçu du prompt">
+      <div class="panneau-header">
+        <h2>📄 Aperçu du prompt</h2>
+        <span class="compteur ok" id="compteur" aria-live="polite" title="Estimation : caractères ÷ 4">~0 tokens</span>
+      </div>
+      <div class="panneau-corps">
+        <pre class="apercu-pre" id="apercu" tabindex="0" aria-live="polite" aria-label="Prompt généré"></pre>
+        <div class="barre-actions">
+          <button class="btn btn-primaire" id="btn-copier"><span aria-hidden="true">📋</span> Copier</button>
+          <button class="btn btn-secondaire" id="btn-reset"><span aria-hidden="true">🗑️</span> Réinitialiser</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// =====================================================================
+// SECTION 1 : DONNÉES — textes des blocs (éditable, séparé de la logique)
+// Chaque entrée : { tag (XML), label/desc (UI), fr, en }. Ordre défini plus bas.
+// =====================================================================
+const BLOCKS = {
+  noyau: {
+    cadrage: {
+      tag: 'cadrage', label: 'Cadrage borné',
+      desc: 'Questions bloquantes une par une, aucune hypothèse implicite.',
+      fr: "Avant toute proposition, identifie uniquement les informations qui bloquent réellement la planification. Pose-les une par une, de la plus critique à la moins critique, et attends ma réponse avant de continuer. Ne fais aucune hypothèse sur mes besoins ou contraintes. Si une information manque sans être bloquante, signale-la et propose l'hypothèse minimale.",
+      en: "Before making any proposal, identify only the information that genuinely blocks planning. Ask for it one item at a time, from the most critical to the least, and wait for my answer before continuing. Make no assumptions about my needs or constraints. If a piece of information is missing but not blocking, flag it and propose the minimal assumption."
+    },
+    succes: {
+      tag: 'definition_succes', label: 'Définition du succès',
+      desc: 'Livrables, critères d’acceptation et définition de « terminé ».',
+      fr: "Avant de planifier, établis avec moi : les livrables attendus, les critères d'acceptation, et la définition de « terminé ». Reformule-les en une courte liste que je validerai. C'est la cible à rebours de laquelle tu construiras le plan.",
+      en: "Before planning, establish with me: the expected deliverables, the acceptance criteria, and the definition of 'done'. Restate them as a short list for me to validate. This is the target you will build the plan backwards from."
+    },
+    budget: {
+      tag: 'budget_contexte', label: 'Budget de contexte',
+      desc: 'Index et résumés d’abord ; lire moins mais juste.',
+      fr: "Commence toujours par les index, résumés et fichiers de contexte. N'ouvre des fichiers ou ne lance des recherches supplémentaires que lorsqu'ils sont nécessaires pour prendre une décision. Lire moins mais juste est préférable à tout lire.",
+      en: "Always start with indexes, summaries and context files. Only open additional files or run further searches when they are needed to make a decision. Reading less but right is better than reading everything."
+    },
+    plan: {
+      tag: 'plan', label: 'Plan spécifique',
+      desc: 'Fichiers, fonctions, étapes, risques — puis feu vert explicite.',
+      fr: "Produis un plan concret, pas un paragraphe vague. Liste les fichiers concernés (chemins exacts), les fonctions à créer ou modifier, l'ordre des étapes, les risques et les hypothèses. Arrête-toi ensuite et attends mon feu vert explicite avant toute exécution.",
+      en: "Produce a concrete plan, not a vague paragraph. List the files involved (exact paths), the functions to create or modify, the order of steps, the risks and the assumptions. Then stop and wait for my explicit go-ahead before any execution."
+    },
+    autoVerif: {
+      tag: 'auto_verification', label: 'Auto-vérification',
+      desc: 'Relire le plan : faiblesses, hypothèses cachées, cas limites.',
+      fr: "Avant de conclure, relis ton plan : cherche ses faiblesses, ses hypothèses cachées, ses oublis et ses cas limites. Vérifie-le contre les critères de succès définis. Si quelque chose manque ou cloche, signale-le avec la correction minimale. Si tu ne sais pas, dis-le plutôt que d'inventer.",
+      en: "Before concluding, reread your plan: look for its weaknesses, hidden assumptions, omissions and edge cases. Check it against the defined success criteria. If something is missing or wrong, flag it with the minimal fix. If you don't know, say so rather than inventing."
+    },
+    ton: {
+      tag: 'ton_efficience', label: 'Ton et efficience (profil TDA)',
+      desc: 'Concis, factuel, une action à la fois, framing positif.',
+      fr: "Communique de façon concise et factuelle. Une action à la fois, des blocs courts, pas de redites ni de politesses de transition. Donne directement le résultat ou la prochaine étape. Emploie un ton calme et direct : formule en positif (« fais X ») plutôt qu'en négatif, et évite l'emphase (pas de « IMPÉRATIF », « TU DOIS », majuscules d'insistance).",
+      en: "Communicate concisely and factually. One action at a time, short blocks, no repetition or transitional politeness. Give the result or the next step directly. Use a calm, direct tone: phrase things positively ('do X') rather than negatively, and avoid emphasis (no 'IMPERATIVE', 'YOU MUST', or shouting capitals)."
+    }
+  },
+  modules: {
+    code: {
+      tag: 'claude_code', label: 'Claude Code — Plan Mode & orchestration',
+      desc: 'Lecture seule, sous-agents spécialisés, modèle selon la tâche.',
+      fr: "Reste en mode lecture seule tant que le plan n'est pas validé : explore sans modifier de fichier. Pour les tâches lourdes ou les gros dépôts, délègue l'exploration à un sous-agent dans un contexte isolé, afin de garder la session principale propre. Pour les tâches séparables, utilise des sous-agents spécialisés par fonctionnalité (plus efficaces que des agents génériques), et choisis le modèle selon la tâche : le plus puissant pour l'architecture, l'intermédiaire pour le code courant, le léger pour les tâches simples.",
+      en: "Stay in read-only mode until the plan is approved: explore without modifying any file. For heavy tasks or large repositories, delegate exploration to a sub-agent in an isolated context, to keep the main session clean. For separable tasks, use sub-agents specialized by feature (more effective than generic agents), and choose the model to fit the task: the most powerful for architecture, the mid-tier for routine code, the lightweight one for simple tasks."
+    },
+    vault: {
+      tag: 'vault', label: 'Vault claude-obsidian',
+      desc: 'Lecture hot.md → index.md → wiki/ ; écriture dans wiki/ seulement.',
+      fr: "Tu opères dans un vault de connaissances structuré. Lecture : `hot.md` d'abord (contexte récent), puis `index.md`, puis seulement les pages utiles du dossier `wiki/`. Écriture : uniquement dans `wiki/` ; ne modifie jamais `.raw/`. Fin de session : résume les décisions et prochaines étapes en moins de 500 tokens dans `hot.md`.",
+      en: "You operate in a structured knowledge vault. Reading: `hot.md` first (recent context), then `index.md`, then only the useful pages in the `wiki/` folder. Writing: only in `wiki/`; never modify `.raw/`. End of session: summarize the decisions and next steps in under 500 tokens in `hot.md`.",
+      graphify: {
+        label: 'Sous-option Graphify',
+        desc: 'Mettre à jour le graphe en fin de tâche seulement.',
+        fr: "Sous-option Graphify : en fin de tâche seulement, mets à jour la visualisation en graphe du vault. Ne maintiens pas de graphe textuel en continu (coûteux en tokens).",
+        en: "Graphify sub-option: at the end of the task only, update the graph visualization of the vault. Do not maintain a textual graph continuously (token-expensive)."
+      }
+    },
+    skills: {
+      tag: 'skills', label: 'Skills',
+      desc: 'Interrupteur maître : inclut les skills cochés dans le panneau Skills.',
+      fr: "Active les skills pertinents au moment opportun plutôt que d'inliner de longues instructions. Limite-toi aux skills réellement utiles à la tâche en cours.",
+      en: "Activate the relevant skills at the right moment rather than inlining long instructions. Limit yourself to the skills that are genuinely useful to the current task."
+    },
+    web: {
+      tag: 'recherche_web', label: 'Recherche web conditionnelle',
+      desc: 'Web seulement pour l’info susceptible d’avoir changé.',
+      fr: "Cherche sur le web uniquement pour les informations susceptibles d'avoir changé : versions de bibliothèques, API récentes, faits postérieurs à ta date de connaissance. Pour les faits stables, réponds directement. Si un vault est actif, consulte-le avant le web.",
+      en: "Search the web only for information likely to have changed: library versions, recent APIs, facts after your knowledge cutoff. For stable facts, answer directly. If a vault is active, consult it before the web."
+    },
+    structure: {
+      tag: 'structure_projet', label: 'Structure du projet',
+      desc: 'Injecte la contrainte mono-fichier ou modulaire choisie.',
+      mono: {
+        fr: "Respecte une architecture mono-fichier : tout dans un seul fichier cohérent, avec des sections clairement séparées. Code sécurisé, lisible et maintenable.",
+        en: "Follow a single-file architecture: everything in one coherent file, with clearly separated sections. Keep the code secure, readable and maintainable."
+      },
+      modulaire: {
+        fr: "Respecte une architecture modulaire : sépare les responsabilités en modules ; explicite l'arborescence dans le plan. Code sécurisé, lisible et maintenable.",
+        en: "Follow a modular architecture: separate responsibilities into modules; spell out the file tree in the plan. Keep the code secure, readable and maintainable."
+      }
+    },
+    securite: {
+      tag: 'securite', label: 'Garde-fous sécurité',
+      desc: 'Diff + approbation avant suppression, migration, action irréversible.',
+      fr: "Ne procède jamais à une suppression de fichiers, une migration, ou une modification massive sans me présenter d'abord le diff et obtenir mon approbation explicite. Signale toute action irréversible avant de l'exécuter.",
+      en: "Never delete files, run a migration, or make a massive change without first showing me the diff and obtaining my explicit approval. Flag any irreversible action before executing it."
+    },
+    gouvernance: {
+      tag: 'gouvernance', label: 'Gouvernance / journal de décisions',
+      desc: 'Consigner décisions, hypothèses, compromis et options rejetées.',
+      fr: "Consigne dans un document unique les décisions d'architecture, les hypothèses retenues, les compromis et les options rejetées (avec la raison du rejet). Tiens-le à jour à chaque décision structurante, pour limiter la dérive sur la durée du projet.",
+      en: "Record in a single document the architecture decisions, the assumptions made, the trade-offs and the rejected options (with the reason for rejection). Keep it up to date at each structuring decision, to limit drift over the life of the project."
+    }
+  }
+};
+
+// Catalogue de skills — affiché dans le panneau « Skills », éditable à la main.
+// Deux sous-catégories : perso (ajout manuel) et populaire (skills GitHub).
+// Chaque skill est tagué :
+//   cible     ∈ 'code' | 'chat' | 'both'   (s'adapte au choix Cible)
+//   structure ∈ 'mono' | 'modulaire' | 'both' (s'adapte au choix Structure)
+// Les skills non pertinents pour la combinaison courante sont masqués.
+const SKILLS = {
+  perso: [
+    {
+      id: 'droit-francais', label: 'Droit français',
+      url: 'https://github.com/brissonjo-sudo/droit-francais-skill',
+      cible: 'both', structure: 'both',
+      fr: "recherche juridique rigoureuse en droit français (sources primaires, vérification de vigueur, citations traçables)",
+      en: "rigorous French legal research (primary sources, in-force verification, traceable citations)"
+    },
+    {
+      id: 'accessibilite', label: 'Accessibilité',
+      url: 'https://github.com/brissonjo-sudo/Skills-accessibilite',
+      cible: 'both', structure: 'both',
+      fr: "communication accessible (DYS, TDAH, TSA, déficience visuelle, fatigue cognitive)",
+      en: "accessible communication (dyslexia, ADHD, autism, visual impairment, cognitive fatigue)"
+    },
+    {
+      id: 'orchestration', label: 'Orchestration (Agent chef orchestrateur)',
+      url: 'https://github.com/brissonjo-sudo/Agent-chef-orchestrateur',
+      cible: 'code', structure: 'both',
+      fr: "orchestration native multi-agents : décomposition, routage par modèle, contrôle qualité, synthèse",
+      en: "native multi-agent orchestration: decomposition, model routing, quality control, synthesis"
+    }
+  ],
+  populaire: [
+    {
+      id: 'anthropic-docx', label: 'docx (officiel Anthropic)',
+      url: 'https://github.com/anthropics/skills/tree/main/skills/docx',
+      cible: 'chat', structure: 'both',
+      fr: "création/édition de documents Word : specs, notes de conception, documents de cadrage",
+      en: "create/edit Word documents: specs, design notes, scoping documents"
+    },
+    {
+      id: 'anthropic-pdf', label: 'pdf (officiel Anthropic)',
+      url: 'https://github.com/anthropics/skills/tree/main/skills/pdf',
+      cible: 'chat', structure: 'both',
+      fr: "génération de PDF : rapports, fiches techniques, livrables de cadrage",
+      en: "generate PDFs: reports, technical sheets, scoping deliverables"
+    },
+    {
+      id: 'anthropic-pptx', label: 'pptx (officiel Anthropic)',
+      url: 'https://github.com/anthropics/skills/tree/main/skills/pptx',
+      cible: 'chat', structure: 'mono',
+      fr: "présentations PowerPoint : revues d'architecture, decks de cadrage",
+      en: "PowerPoint decks: architecture reviews, scoping decks"
+    },
+    {
+      id: 'anthropic-xlsx', label: 'xlsx (officiel Anthropic)',
+      url: 'https://github.com/anthropics/skills/tree/main/skills/xlsx',
+      cible: 'chat', structure: 'mono',
+      fr: "tableurs Excel : budgets, matrices d'exigences, feuilles de route",
+      en: "Excel spreadsheets: budgets, requirement matrices, roadmaps"
+    },
+    {
+      id: 'mcp-builder', label: 'MCP Builder (officiel Anthropic)',
+      url: 'https://github.com/anthropics/skills/tree/main/skills/mcp-builder',
+      cible: 'code', structure: 'modulaire',
+      fr: "création de serveurs MCP de production (Python/Node) exposant des outils réutilisables",
+      en: "build production MCP servers (Python/Node) exposing reusable tools"
+    },
+    {
+      id: 'architecture-design', label: 'Architecture Design',
+      url: 'https://github.com/vukhanhtruong/claude-skill-architecture-design',
+      cible: 'code', structure: 'modulaire',
+      fr: "documentation d'architecture standardisée (ARCHITECTURE.md, diagrammes Mermaid)",
+      en: "standardized architecture documentation (ARCHITECTURE.md, Mermaid diagrams)"
+    },
+    {
+      id: 'code-review', label: 'Code Review',
+      url: 'https://github.com/awesome-skills/code-review-skill',
+      cible: 'code', structure: 'modulaire',
+      fr: "revue de code complète multi-langages : garde la cohérence à mesure que les modules grossissent",
+      en: "comprehensive multi-language code review: keeps consistency as modules grow"
+    },
+    {
+      id: 'project-scaffolding', label: 'Project Scaffolding',
+      url: 'https://github.com/hmohamed01/Claude-Code-Scaffolding-Skill',
+      cible: 'code', structure: 'both',
+      fr: "échafaudage de projet (70+ types) : structure, framework, tests, configuration de départ",
+      en: "project scaffolding (70+ types): structure, framework, tests, initial config"
+    },
+    {
+      id: 'git-workflow', label: 'Git Workflow',
+      url: 'https://github.com/netresearch/git-workflow-skill',
+      cible: 'code', structure: 'both',
+      fr: "bonnes pratiques Git : stratégies de branches, commits sémantiques, workflows de PR",
+      en: "Git best practices: branching strategies, semantic commits, PR workflows"
+    },
+    {
+      id: 'd2-diagrams', label: 'D2 Diagrams',
+      url: 'https://github.com/heathdutton/claude-d2-diagrams',
+      cible: 'code', structure: 'mono',
+      fr: "diagrammes d'architecture autonomes (D2/SVG) générés depuis le code",
+      en: "standalone architecture diagrams (D2/SVG) generated from the codebase"
+    },
+    {
+      id: 'readme-generator', label: 'README Generator',
+      url: 'https://github.com/GLINCKER/claude-code-marketplace',
+      cible: 'chat', structure: 'modulaire',
+      fr: "génération d'un README complet (installation, API, exemples) pour un projet multi-modules",
+      en: "generate a complete README (install, API, examples) for a multi-module project"
+    }
+  ]
+};
+
+// Index id → skill (avec catégorie) pour le filtrage et l'assemblage.
+const SKILL_BY_ID = {};
+SKILLS.perso.forEach(s => { s._cat = 'perso'; SKILL_BY_ID[s.id] = s; });
+SKILLS.populaire.forEach(s => { s._cat = 'populaire'; SKILL_BY_ID[s.id] = s; });
+
+// Un skill est visible si ses tags couvrent la Cible et la Structure courantes.
+function skillVisible(s) {
+  return (s.cible === etat.cible || s.cible === 'both')
+      && (s.structure === etat.structure || s.structure === 'both');
+}
+
+// Ordres FIGÉS d'assemblage (jamais l'ordre de cochage — préserve le prompt caching).
+const NOYAU_ORDER  = ['cadrage', 'succes', 'budget', 'plan', 'autoVerif', 'ton'];
+const MODULE_ORDER = ['code', 'vault', 'skills', 'web', 'structure', 'securite', 'gouvernance'];
+
+// Préréglages d'envergure : modules pré-cochés (effet en mode « Blocs activables » seulement ;
+// « Prompt complet » inclut tout et ignore l'envergure). Modifiable à la main ensuite.
+const PRESET_ENVERGURE = {
+  court: [],
+  moyen: ['structure', 'securite'],
+  long:  ['structure', 'securite', 'gouvernance', 'web']
+};
+function appliquerPreset() {
+  etat.modules = new Set(PRESET_ENVERGURE[etat.envergure] || []);
+}
+
+// =====================================================================
+// SECTION 2 : ÉTAT
+// =====================================================================
+let etat = {
+  cible: 'code', structure: 'modulaire', mode: 'blocs', envergure: 'court',
+  langue: 'fr', format: 'texte',
+  modules: new Set(), graphify: false, skillsSel: new Set()
+};
+
+// =====================================================================
+// SECTION 3 : ASSEMBLAGE DU PROMPT
+// =====================================================================
+
+// Texte d'un module selon l'état (gère structure, skills, vault/graphify).
+function texteModule(key, L) {
+  if (key === 'structure') {
+    return BLOCKS.modules.structure[etat.structure === 'mono' ? 'mono' : 'modulaire'][L];
+  }
+  if (key === 'vault') {
+    let t = BLOCKS.modules.vault[L];
+    if (etat.graphify) t += '\n' + BLOCKS.modules.vault.graphify[L];
+    return t;
+  }
+  if (key === 'skills') {
+    let t = BLOCKS.modules.skills[L];
+    // Seulement les skills cochés ET visibles pour la combinaison Cible × Structure.
+    const sel = [...SKILLS.perso, ...SKILLS.populaire]
+      .filter(s => etat.skillsSel.has(s.id) && skillVisible(s));
+    if (sel.length) {
+      const intro = L === 'fr' ? 'Skills à mobiliser pour ce projet :' : 'Skills to use for this project:';
+      const lignes = sel.map(s => '- ' + s.label + ' (' + s.url + ') — ' + s[L]);
+      t += '\n' + intro + '\n' + lignes.join('\n');
+    }
+    return t;
+  }
+  return BLOCKS.modules[key][L];
+}
+
+// Modules effectivement actifs selon le mode et la cible.
+function modulesActifs() {
+  let actifs;
+  if (etat.mode === 'complet') {
+    actifs = MODULE_ORDER.slice();
+  } else {
+    actifs = MODULE_ORDER.filter(k => etat.modules.has(k));
+  }
+  // Le module Claude Code n'a de sens qu'en cible Code.
+  if (etat.cible !== 'code') actifs = actifs.filter(k => k !== 'code');
+  return actifs;
+}
+
+// Enveloppe un bloc selon le format choisi.
+function emballer(tag, texte, format) {
+  if (format === 'xml') return '<' + tag + '>\n' + texte + '\n</' + tag + '>';
+  return texte;
+}
+
+// Construit le prompt complet dans l'ordre figé.
+function assembler() {
+  const L = etat.langue;
+  const fmt = etat.format;
+  const parts = [];
+
+  for (const key of NOYAU_ORDER) {
+    const b = BLOCKS.noyau[key];
+    parts.push(emballer(b.tag, b[L], fmt));
+  }
+  for (const key of modulesActifs()) {
+    const b = BLOCKS.modules[key];
+    parts.push(emballer(b.tag, texteModule(key, L), fmt));
+  }
+  return parts.join(fmt === 'xml' ? '\n' : '\n\n');
+}
+
+// Estimation de tokens (≈ caractères ÷ 4).
+function estimerTokens(texte) { return Math.round(texte.length / 4); }
+
+// =====================================================================
+// SECTION 4 : RENDU
+// =====================================================================
+let elApercu, elCompteur, elModulesList;
+
+function render() {
+  const prompt = assembler();
+  elApercu.textContent = prompt;
+
+  const tokens = estimerTokens(prompt);
+  elCompteur.textContent = '~' + tokens + ' tokens';
+  elCompteur.classList.remove('ok', 'warn', 'err');
+  elCompteur.classList.add(tokens < 800 ? 'ok' : tokens <= 1500 ? 'warn' : 'err');
+
+  // Afficher / masquer dynamiquement selon l'état.
+  const enComplet = etat.mode === 'complet';
+  elModulesList.querySelectorAll('[data-module]').forEach(li => {
+    const key = li.dataset.module;
+    // Le module Claude Code disparaît en cible Chat.
+    li.hidden = (key === 'code' && etat.cible !== 'code');
+    const cb = li.querySelector('input[data-module-cb]');
+    if (cb) {
+      cb.disabled = enComplet;              // en mode complet, tout est inclus d'office
+      // En blocs : la case reflète l'état (source unique de vérité) ; en complet : tout coché.
+      cb.checked = enComplet ? !li.hidden : etat.modules.has(key);
+    }
+  });
+  // Sous-option Graphify visible seulement si le module Vault est actif.
+  const actifs = new Set(modulesActifs());
+  const sousGraph = document.getElementById('sous-graphify');
+  if (sousGraph) sousGraph.hidden = !actifs.has('vault');
+  const cbGraph = document.getElementById('cb-graphify');
+  if (cbGraph) cbGraph.disabled = enComplet;
+
+  // Panneau Skills : filtrer par Cible × Structure (masquer les non pertinents).
+  let visPerso = 0, visPop = 0;
+  document.querySelectorAll('[data-skill-id]').forEach(li => {
+    const s = SKILL_BY_ID[li.dataset.skillId];
+    const vis = skillVisible(s);
+    li.hidden = !vis;
+    if (vis) { if (s._cat === 'perso') visPerso++; else visPop++; }
+  });
+  document.getElementById('vide-perso').hidden = visPerso > 0;
+  document.getElementById('vide-populaire').hidden = visPop > 0;
+
+  // Rappel : des skills cochés mais module « Skills » décoché → ils n'iront pas dans le prompt.
+  const skillsCoches = etat.skillsSel.size > 0;
+  document.getElementById('skills-hint').hidden = !(skillsCoches && !actifs.has('skills'));
+}
+
+// =====================================================================
+// SECTION 5 : CONSTRUCTION DE L'INTERFACE (data-driven depuis BLOCKS)
+// =====================================================================
+function creerOptionNoyau(key) {
+  const b = BLOCKS.noyau[key];
+  const li = document.createElement('li');
+  li.className = 'option verrou';
+
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.checked = true; cb.disabled = true;
+  cb.setAttribute('aria-label', b.label + ' (toujours présent)');
+
+  const corps = document.createElement('div');
+  corps.className = 'option-corps';
+  const nom = document.createElement('div');
+  nom.className = 'option-nom';
+  nom.textContent = b.label;
+  const badge = document.createElement('span');
+  badge.className = 'badge-noyau'; badge.textContent = 'NOYAU';
+  nom.appendChild(badge);
+  const desc = document.createElement('div');
+  desc.className = 'option-desc'; desc.textContent = b.desc;
+  corps.appendChild(nom); corps.appendChild(desc);
+
+  li.appendChild(cb); li.appendChild(corps);
+  return li;
+}
+
+function creerOptionModule(key) {
+  const b = BLOCKS.modules[key];
+  const li = document.createElement('li');
+  li.className = 'option'; li.dataset.module = key;
+
+  const id = 'mod-' + key;
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.id = id; cb.dataset.moduleCb = key;
+  cb.addEventListener('change', () => {
+    if (cb.checked) etat.modules.add(key); else etat.modules.delete(key);
+    render();
+  });
+
+  const corps = document.createElement('div');
+  corps.className = 'option-corps';
+  const nom = document.createElement('label');
+  nom.className = 'option-nom'; nom.setAttribute('for', id);
+  nom.textContent = b.label;
+  const desc = document.createElement('div');
+  desc.className = 'option-desc'; desc.textContent = b.desc;
+  corps.appendChild(nom); corps.appendChild(desc);
+
+  // Sous-option spécifique (Graphify sous Vault). Le catalogue de skills vit dans son panneau.
+  if (key === 'vault')  corps.appendChild(creerSousGraphify());
+
+  li.appendChild(cb); li.appendChild(corps);
+  return li;
+}
+
+// Une ligne de skill (dans le panneau Skills). Affichée/masquée par render() selon le filtre.
+function creerOptionSkill(s) {
+  const li = document.createElement('li');
+  li.className = 'option'; li.dataset.skillId = s.id;
+
+  const id = 'skill-' + s.id;
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.id = id; cb.dataset.skill = s.id;
+  cb.addEventListener('change', () => {
+    if (cb.checked) etat.skillsSel.add(s.id); else etat.skillsSel.delete(s.id);
+    render();
+  });
+
+  const corps = document.createElement('div');
+  corps.className = 'option-corps';
+  const nom = document.createElement('label');
+  nom.className = 'option-nom'; nom.setAttribute('for', id);
+  nom.textContent = s.label;
+  const desc = document.createElement('div');
+  desc.className = 'option-desc'; desc.textContent = s.fr;
+  corps.appendChild(nom); corps.appendChild(desc);
+
+  const ref = document.createElement('div');
+  ref.className = 'option-desc';
+  const a = document.createElement('a');
+  a.className = 'lien-skill'; a.href = s.url; a.target = '_blank'; a.rel = 'noopener';
+  a.textContent = s.url;
+  ref.appendChild(a);
+  corps.appendChild(ref);
+
+  li.appendChild(cb); li.appendChild(corps);
+  return li;
+}
+
+function creerSousGraphify() {
+  const ul = document.createElement('ul');
+  ul.className = 'sous-options'; ul.id = 'sous-graphify'; ul.hidden = true;
+
+  const g = BLOCKS.modules.vault.graphify;
+  const li = document.createElement('li');
+  li.className = 'option';
+
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.id = 'cb-graphify';
+  cb.addEventListener('change', () => { etat.graphify = cb.checked; render(); });
+
+  const corps = document.createElement('div');
+  corps.className = 'option-corps';
+  const nom = document.createElement('label');
+  nom.className = 'option-nom'; nom.setAttribute('for', 'cb-graphify');
+  nom.textContent = g.label;
+  const desc = document.createElement('div');
+  desc.className = 'option-desc'; desc.textContent = g.desc;
+  corps.appendChild(nom); corps.appendChild(desc);
+
+  li.appendChild(cb); li.appendChild(corps);
+  ul.appendChild(li);
+  return ul;
+}
+
+// =====================================================================
+// SECTION 6 : ÉVÉNEMENTS & POINT D'ENTRÉE
+// =====================================================================
+function brancherParametres() {
+  document.querySelectorAll('input[name="cible"]').forEach(r =>
+    r.addEventListener('change', () => { etat.cible = r.value; render(); }));
+  document.querySelectorAll('input[name="structure"]').forEach(r =>
+    r.addEventListener('change', () => { etat.structure = r.value; render(); }));
+  document.querySelectorAll('input[name="envergure"]').forEach(r =>
+    r.addEventListener('change', () => { etat.envergure = r.value; appliquerPreset(); render(); }));
+  document.querySelectorAll('input[name="mode"]').forEach(r =>
+    r.addEventListener('change', () => { etat.mode = r.value; render(); }));
+  document.querySelectorAll('input[name="langue"]').forEach(r =>
+    r.addEventListener('change', () => { etat.langue = r.value; render(); }));
+  document.querySelectorAll('input[name="format"]').forEach(r =>
+    r.addEventListener('change', () => { etat.format = r.value; render(); }));
+}
+
+function copier() {
+  const texte = elApercu.textContent;
+  const btn = document.getElementById('btn-copier');
+  const ok = () => { btn.innerHTML = '<span aria-hidden="true">✅</span> Copié !'; setTimeout(() => { btn.innerHTML = '<span aria-hidden="true">📋</span> Copier'; }, 2000); };
+  // Clipboard API si dispo ; sinon fallback execCommand (contexte file://).
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texte).then(ok).catch(() => fallbackCopie(texte, btn, ok));
+  } else {
+    fallbackCopie(texte, btn, ok);
+  }
+}
+
+function fallbackCopie(texte, btn, ok) {
+  const sel = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(elApercu);
+  sel.removeAllRanges(); sel.addRange(range);
+  try { document.execCommand('copy'); ok(); }
+  catch { btn.innerHTML = '<span aria-hidden="true">⚠️</span> Copie manuelle'; }
+  sel.removeAllRanges();
+}
+
+function reset() {
+  etat.cible = 'code'; etat.structure = 'modulaire'; etat.mode = 'blocs'; etat.envergure = 'court';
+  etat.langue = 'fr'; etat.format = 'texte';
+  etat.modules = new Set(); etat.graphify = false; etat.skillsSel = new Set();
+
+  document.querySelector('input[name="cible"][value="code"]').checked = true;
+  document.querySelector('input[name="structure"][value="modulaire"]').checked = true;
+  document.querySelector('input[name="envergure"][value="court"]').checked = true;
+  document.querySelector('input[name="mode"][value="blocs"]').checked = true;
+  document.querySelector('input[name="langue"][value="fr"]').checked = true;
+  document.querySelector('input[name="format"][value="texte"]').checked = true;
+  document.querySelectorAll('input[data-module-cb], input[data-skill], #cb-graphify')
+    .forEach(cb => { cb.checked = false; });
+
+  render();
+}
+
+function init() {
+  elApercu = document.getElementById('apercu');
+  elCompteur = document.getElementById('compteur');
+  elModulesList = document.getElementById('modules-list');
+
+  const noyauList = document.getElementById('noyau-list');
+  NOYAU_ORDER.forEach(k => noyauList.appendChild(creerOptionNoyau(k)));
+  MODULE_ORDER.forEach(k => elModulesList.appendChild(creerOptionModule(k)));
+
+  const persoList = document.getElementById('skills-perso');
+  SKILLS.perso.forEach(s => persoList.appendChild(creerOptionSkill(s)));
+  const popList = document.getElementById('skills-populaire');
+  SKILLS.populaire.forEach(s => popList.appendChild(creerOptionSkill(s)));
+
+  brancherParametres();
+  document.getElementById('btn-copier').addEventListener('click', copier);
+  document.getElementById('btn-reset').addEventListener('click', reset);
+
+  render();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

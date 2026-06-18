@@ -1,0 +1,7 @@
+# Outils locaux Claude Code (config de prévisualisation, non pertinente pour le dépôt)
+.claude/
+
+# Artefacts OS / éditeurs
+Thumbs.db
+.DS_Store
+*.swp
