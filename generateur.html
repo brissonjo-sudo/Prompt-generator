@@ -214,7 +214,7 @@
             <label><input type="radio" name="envergure" value="moyen"><span>Moyen</span></label>
             <label><input type="radio" name="envergure" value="long"><span>Long terme</span></label>
           </div>
-          <p class="option-desc" style="margin-top:.4rem;">Pré-coche les modules adaptés (Court : noyau seul · Moyen : structure + sécurité · Long : + gouvernance &amp; web). Modifiable ensuite.</p>
+          <p class="option-desc" style="margin-top:.4rem;">Pré-coche les modules adaptés (Court : noyau seul · Moyen : structure + sécurité · Long : + gouvernance &amp; web). En cible Claude Code, le module Claude Code est ajouté dès Moyen. Modifiable ensuite.</p>
         </fieldset>
 
         <fieldset>
@@ -318,13 +318,17 @@ const BLOCKS = {
       tag: 'budget_contexte', label: 'Budget de contexte',
       desc: 'Index et résumés d’abord ; lire moins mais juste.',
       fr: "Commence toujours par les index, résumés et fichiers de contexte. N'ouvre des fichiers ou ne lance des recherches supplémentaires que lorsqu'ils sont nécessaires pour prendre une décision. Lire moins mais juste est préférable à tout lire.",
-      en: "Always start with indexes, summaries and context files. Only open additional files or run further searches when they are needed to make a decision. Reading less but right is better than reading everything."
+      en: "Always start with indexes, summaries and context files. Only open additional files or run further searches when they are needed to make a decision. Reading less but right is better than reading everything.",
+      frChat: "Commence par raisonner à partir du contexte déjà fourni dans la conversation. Ne demande des informations supplémentaires ou ne creuse un point que si c'est nécessaire pour prendre une décision. Privilégier l'essentiel pertinent est préférable à l'exhaustivité.",
+      enChat: "Start by reasoning from the context already provided in the conversation. Only ask for additional information or dig into a point when it is needed to make a decision. Focusing on what is relevant is better than being exhaustive."
     },
     plan: {
       tag: 'plan', label: 'Plan spécifique',
       desc: 'Fichiers, fonctions, étapes, risques — puis feu vert explicite.',
       fr: "Produis un plan concret, pas un paragraphe vague. Liste les fichiers concernés (chemins exacts), les fonctions à créer ou modifier, l'ordre des étapes, les risques et les hypothèses. Arrête-toi ensuite et attends mon feu vert explicite avant toute exécution.",
-      en: "Produce a concrete plan, not a vague paragraph. List the files involved (exact paths), the functions to create or modify, the order of steps, the risks and the assumptions. Then stop and wait for my explicit go-ahead before any execution."
+      en: "Produce a concrete plan, not a vague paragraph. List the files involved (exact paths), the functions to create or modify, the order of steps, the risks and the assumptions. Then stop and wait for my explicit go-ahead before any execution.",
+      frChat: "Produis un plan concret, pas un paragraphe vague. Liste les étapes dans l'ordre, les livrables intermédiaires, les risques et les hypothèses. Arrête-toi ensuite et attends mon feu vert explicite avant de produire le livrable final.",
+      enChat: "Produce a concrete plan, not a vague paragraph. List the steps in order, the intermediate deliverables, the risks and the assumptions. Then stop and wait for my explicit go-ahead before producing the final deliverable."
     },
     autoVerif: {
       tag: 'auto_verification', label: 'Auto-vérification',
@@ -348,7 +352,7 @@ const BLOCKS = {
     },
     vault: {
       tag: 'vault', label: 'Vault claude-obsidian',
-      desc: 'Lecture hot.md → index.md → wiki/ ; écriture dans wiki/ seulement.',
+      desc: 'Convention spécifique (à cocher manuellement) : lecture hot.md → index.md → wiki/, écriture dans wiki/ seulement.',
       fr: "Tu opères dans un vault de connaissances structuré. Lecture : `hot.md` d'abord (contexte récent), puis `index.md`, puis seulement les pages utiles du dossier `wiki/`. Écriture : uniquement dans `wiki/` ; ne modifie jamais `.raw/`. Fin de session : résume les décisions et prochaines étapes en moins de 500 tokens dans `hot.md`.",
       en: "You operate in a structured knowledge vault. Reading: `hot.md` first (recent context), then `index.md`, then only the useful pages in the `wiki/` folder. Writing: only in `wiki/`; never modify `.raw/`. End of session: summarize the decisions and next steps in under 500 tokens in `hot.md`.",
       graphify: {
@@ -531,7 +535,11 @@ const PRESET_ENVERGURE = {
   long:  ['structure', 'securite', 'gouvernance', 'web']
 };
 function appliquerPreset() {
-  etat.modules = new Set(PRESET_ENVERGURE[etat.envergure] || []);
+  const mods = new Set(PRESET_ENVERGURE[etat.envergure] || []);
+  // Pour un projet Claude Code non court, le module « Claude Code » (plan mode, sous-agents,
+  // routage par modèle) est le plus utile : on l'ajoute au preset.
+  if (etat.cible === 'code' && etat.envergure !== 'court') mods.add('code');
+  etat.modules = mods;
 }
 
 // =====================================================================
@@ -558,25 +566,34 @@ function texteModule(key, L) {
     return t;
   }
   if (key === 'skills') {
-    let t = BLOCKS.modules.skills[L];
     // Seulement les skills cochés ET visibles pour la combinaison Cible × Structure.
     const sel = [...SKILLS.perso, ...SKILLS.populaire]
       .filter(s => etat.skillsSel.has(s.id) && skillVisible(s));
-    if (sel.length) {
-      const intro = L === 'fr' ? 'Skills à mobiliser pour ce projet :' : 'Skills to use for this project:';
-      const lignes = sel.map(s => '- ' + s.label + ' (' + s.url + ') — ' + s[L]);
-      t += '\n' + intro + '\n' + lignes.join('\n');
-    }
+    // Aucun skill sélectionné → pas de bloc (évite une consigne générique sans contenu).
+    if (!sel.length) return '';
+    let t = BLOCKS.modules.skills[L];
+    const intro = L === 'fr' ? 'Skills à mobiliser pour ce projet :' : 'Skills to use for this project:';
+    const lignes = sel.map(s => '- ' + s.label + ' (' + s.url + ') — ' + s[L]);
+    t += '\n' + intro + '\n' + lignes.join('\n');
     return t;
   }
   return BLOCKS.modules[key][L];
+}
+
+// Texte d'un bloc du noyau : variante « chat » si elle existe et que la cible est le chat.
+function texteNoyau(key, L) {
+  const b = BLOCKS.noyau[key];
+  if (etat.cible === 'chat' && b[L + 'Chat']) return b[L + 'Chat'];
+  return b[L];
 }
 
 // Modules effectivement actifs selon le mode et la cible.
 function modulesActifs() {
   let actifs;
   if (etat.mode === 'complet') {
-    actifs = MODULE_ORDER.slice();
+    // « Complet » = tous les modules standards. Le vault (convention spécifique) reste opt-in :
+    // on ne l'inclut que s'il est explicitement coché.
+    actifs = MODULE_ORDER.filter(k => k !== 'vault' || etat.modules.has('vault'));
   } else {
     actifs = MODULE_ORDER.filter(k => etat.modules.has(k));
   }
@@ -591,6 +608,12 @@ function emballer(tag, texte, format) {
   return texte;
 }
 
+// Emplacement de la tâche réelle, en tête du prompt (les consignes ne font que cadrer).
+const TACHE_PLACEHOLDER = {
+  fr: "[Décris ici ton projet ou ta tâche, puis laisse les consignes ci-dessous cadrer la planification.]",
+  en: "[Describe your project or task here, then let the guidelines below frame the planning.]"
+};
+
 // Construit le prompt complet dans l'ordre figé.
 function assembler() {
   const L = etat.langue;
@@ -599,13 +622,16 @@ function assembler() {
 
   for (const key of NOYAU_ORDER) {
     const b = BLOCKS.noyau[key];
-    parts.push(emballer(b.tag, b[L], fmt));
+    parts.push(emballer(b.tag, texteNoyau(key, L), fmt));
   }
   for (const key of modulesActifs()) {
     const b = BLOCKS.modules[key];
-    parts.push(emballer(b.tag, texteModule(key, L), fmt));
+    const texte = texteModule(key, L);
+    if (!texte) continue; // bloc sans contenu (ex. Skills sans skill sélectionné) → ignoré
+    parts.push(emballer(b.tag, texte, fmt));
   }
-  return parts.join(fmt === 'xml' ? '\n' : '\n\n');
+  const corps = parts.join(fmt === 'xml' ? '\n' : '\n\n');
+  return TACHE_PLACEHOLDER[L] + '\n\n' + corps;
 }
 
 // Estimation de tokens (≈ caractères ÷ 4).
@@ -783,7 +809,7 @@ function creerSousGraphify() {
 // =====================================================================
 function brancherParametres() {
   document.querySelectorAll('input[name="cible"]').forEach(r =>
-    r.addEventListener('change', () => { etat.cible = r.value; render(); }));
+    r.addEventListener('change', () => { etat.cible = r.value; appliquerPreset(); render(); }));
   document.querySelectorAll('input[name="structure"]').forEach(r =>
     r.addEventListener('change', () => { etat.structure = r.value; render(); }));
   document.querySelectorAll('input[name="envergure"]').forEach(r =>
