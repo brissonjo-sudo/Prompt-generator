@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🧭 Générateur de prompts de planification</title>
+  <title>Générateur de prompts de planification</title>
 
   <!--
     Outil 100 % local — destiné à la fonction publique.
@@ -29,6 +29,19 @@
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     [hidden] { display: none !important; }
+
+    /* Contenu réservé aux lecteurs d'écran (RGAA) */
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+    /* Lien d'évitement : invisible jusqu'au focus clavier */
+    .skip-lien {
+      position: absolute; left: .5rem; top: -3rem; z-index: 10;
+      background: var(--accent); color: #fff; padding: .5rem .9rem;
+      border-radius: 6px; font-size: .85rem; transition: top .15s;
+    }
+    .skip-lien:focus { top: .5rem; }
     body {
       font-family: system-ui, -apple-system, sans-serif;
       background: var(--bg);
@@ -82,6 +95,7 @@
     .segmente { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
     .segmente label {
       cursor: pointer; padding: .35rem .9rem; font-size: .85rem;
+      display: inline-flex; align-items: center; justify-content: center; min-height: 38px;
       background: var(--surface); transition: background .15s, color .15s;
     }
     .segmente label:not(:last-child) { border-right: 1px solid var(--border); }
@@ -166,6 +180,11 @@
     .btn-secondaire { background: #f1f5f9; color: var(--text); border: 1px solid var(--border); }
     .btn-secondaire:hover:not(:disabled) { background: #e2e8f0; }
 
+    /* ---- Pied de page (mention d'accessibilité) ---- */
+    .pied { text-align: center; margin-top: 1.25rem; font-size: .76rem; color: var(--muted); }
+    .pied a { color: var(--accent-h); }
+    .pied a:focus-visible { outline: 2px solid var(--accent-h); outline-offset: 2px; }
+
     /* ---- Responsive (utilisable à 380 px) ---- */
     @media (max-width: 1040px) {
       .grille { grid-template-columns: 1fr; }
@@ -183,19 +202,20 @@
 </style>
 </head>
 <body>
+<a href="#apercu" class="skip-lien">Aller à l'aperçu du prompt</a>
 <div class="app">
 
   <!-- En-tête -->
   <header>
-    <h1>🧭 Générateur de prompts de planification</h1>
-    <p class="confidentialite">🔒 100 % local — aucune donnée envoyée. Conforme RGPD (privacy by design).</p>
+    <h1><span aria-hidden="true">🧭</span> Générateur de prompts de planification</h1>
+    <p class="confidentialite"><span aria-hidden="true">🔒</span> 100 % local — aucune donnée envoyée. Conforme RGPD (privacy by design).</p>
   </header>
 
   <div class="grille">
 
     <!-- ============ COLONNE PARAMÈTRES ============ -->
     <section class="panneau" aria-label="Paramètres">
-      <div class="panneau-header"><h2>⚙️ Paramètres</h2></div>
+      <div class="panneau-header"><h2><span aria-hidden="true">⚙️</span> Paramètres</h2></div>
       <div class="panneau-corps">
 
         <fieldset>
@@ -250,12 +270,12 @@
 
         <fieldset>
           <legend>Noyau — toujours présent</legend>
-          <ul class="liste-options" id="noyau-list"></ul>
+          <ul class="liste-options" id="noyau-list" role="list"></ul>
         </fieldset>
 
         <fieldset>
           <legend>Modules activables</legend>
-          <ul class="liste-options" id="modules-list"></ul>
+          <ul class="liste-options" id="modules-list" role="list"></ul>
         </fieldset>
 
       </div>
@@ -263,20 +283,20 @@
 
     <!-- ============ COLONNE SKILLS ============ -->
     <section class="panneau" aria-label="Skills">
-      <div class="panneau-header"><h2>🧩 Skills</h2></div>
+      <div class="panneau-header"><h2><span aria-hidden="true">🧩</span> Skills</h2></div>
       <div class="panneau-corps">
         <p class="skills-hint" id="skills-hint" hidden>
-          ⚠️ Des skills sont cochés, mais le module « Skills » est décoché dans les Paramètres :
+          <span aria-hidden="true">⚠️</span> Des skills sont cochés, mais le module « Skills » est décoché dans les Paramètres :
           cochez-le pour les inclure au prompt.
         </p>
         <fieldset>
           <legend>Skills perso</legend>
-          <ul class="liste-options" id="skills-perso"></ul>
+          <ul class="liste-options" id="skills-perso" role="list"></ul>
           <p class="skills-vide" id="vide-perso" hidden>Aucun skill perso pour cette combinaison.</p>
         </fieldset>
         <fieldset style="margin-bottom:0;">
           <legend>Skills populaires (GitHub)</legend>
-          <ul class="liste-options" id="skills-populaire"></ul>
+          <ul class="liste-options" id="skills-populaire" role="list"></ul>
           <p class="skills-vide" id="vide-populaire" hidden>Aucun skill populaire pour cette combinaison.</p>
         </fieldset>
       </div>
@@ -285,19 +305,27 @@
     <!-- ============ COLONNE APERÇU ============ -->
     <section class="panneau" aria-label="Aperçu du prompt">
       <div class="panneau-header">
-        <h2>📄 Aperçu du prompt</h2>
+        <h2><span aria-hidden="true">📄</span> Aperçu du prompt</h2>
         <span class="compteur ok" id="compteur" aria-live="polite" title="Estimation : caractères ÷ 3,5 (FR) ou ÷ 4 (EN)">~0 tokens</span>
       </div>
       <div class="panneau-corps">
-        <pre class="apercu-pre" id="apercu" tabindex="0" aria-label="Prompt généré"></pre>
+        <pre class="apercu-pre" id="apercu" tabindex="0" role="region" aria-label="Prompt généré (lecture seule)"></pre>
         <div class="barre-actions">
           <button class="btn btn-primaire" id="btn-copier"><span aria-hidden="true">📋</span> Copier</button>
           <button class="btn btn-secondaire" id="btn-reset"><span aria-hidden="true">🗑️</span> Réinitialiser</button>
         </div>
+        <span id="copie-statut" class="sr-only" role="status" aria-live="polite"></span>
       </div>
     </section>
 
   </div>
+
+  <footer class="pied">
+    Accessibilité : conformité RGAA à compléter par l'entité déployeuse —
+    <a href="https://github.com/brissonjo-sudo/Prompt-generator/blob/main/DECLARATION-ACCESSIBILITE.md"
+       target="_blank" rel="noopener"
+       aria-label="Déclaration d'accessibilité (ouvre dans un nouvel onglet)">déclaration d'accessibilité</a>.
+  </footer>
 </div>
 
 <script>
@@ -680,9 +708,12 @@ function render() {
 
   const tokens = estimerTokens(prompt);
   const niveau = tokens < 800 ? 'ok' : tokens <= 1500 ? 'warn' : 'err';
-  // Marqueur distinct par niveau : l'information de coût ne repose pas sur la couleur seule (RGAA 3.1).
+  // Marqueur visuel distinct par niveau (info non portée par la couleur seule, RGAA 3.1) ;
+  // le glyphe est masqué aux lecteurs d'écran et doublé d'un libellé textuel sr-only.
   const marqueur = niveau === 'ok' ? '✓' : niveau === 'warn' ? '⚠' : '⛔';
-  elCompteur.textContent = marqueur + ' ~' + tokens + ' tokens';
+  const motNiveau = niveau === 'ok' ? 'budget correct' : niveau === 'warn' ? 'budget élevé' : 'budget dépassé';
+  elCompteur.innerHTML = '<span aria-hidden="true">' + marqueur + '</span> ~' + tokens +
+    ' tokens<span class="sr-only"> — ' + motNiveau + '</span>';
   elCompteur.classList.remove('ok', 'warn', 'err');
   elCompteur.classList.add(niveau);
 
@@ -811,6 +842,7 @@ function creerOptionSkill(s) {
   const a = document.createElement('a');
   a.className = 'lien-skill'; a.href = s.url; a.target = '_blank'; a.rel = 'noopener';
   a.textContent = s.url;
+  a.setAttribute('aria-label', s.label + ' — dépôt du skill (ouvre dans un nouvel onglet)');
   ref.appendChild(a);
   corps.appendChild(ref);
 
@@ -821,6 +853,7 @@ function creerOptionSkill(s) {
 function creerSousGraphify() {
   const ul = document.createElement('ul');
   ul.className = 'sous-options'; ul.id = 'sous-graphify'; ul.hidden = true;
+  ul.setAttribute('role', 'list');
 
   const g = BLOCKS.modules.vault.graphify;
   const li = document.createElement('li');
@@ -865,7 +898,12 @@ function brancherParametres() {
 function copier() {
   const texte = elApercu.textContent;
   const btn = document.getElementById('btn-copier');
-  const ok = () => { btn.innerHTML = '<span aria-hidden="true">✅</span> Copié !'; setTimeout(() => { btn.innerHTML = '<span aria-hidden="true">📋</span> Copier'; }, 2000); };
+  const annoncer = (msg) => { const s = document.getElementById('copie-statut'); if (s) s.textContent = msg; };
+  const ok = () => {
+    btn.innerHTML = '<span aria-hidden="true">✅</span> Copié !';
+    annoncer('Prompt copié dans le presse-papiers.');
+    setTimeout(() => { btn.innerHTML = '<span aria-hidden="true">📋</span> Copier'; }, 2000);
+  };
   // Clipboard API si dispo ; sinon fallback execCommand (contexte file://).
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(texte).then(ok).catch(() => fallbackCopie(texte, btn, ok));
@@ -880,7 +918,11 @@ function fallbackCopie(texte, btn, ok) {
   range.selectNodeContents(elApercu);
   sel.removeAllRanges(); sel.addRange(range);
   try { document.execCommand('copy'); ok(); }
-  catch { btn.innerHTML = '<span aria-hidden="true">⚠️</span> Copie manuelle'; }
+  catch {
+    btn.innerHTML = '<span aria-hidden="true">⚠️</span> Copie manuelle';
+    const s = document.getElementById('copie-statut');
+    if (s) s.textContent = 'Copie automatique impossible : sélectionnez le texte de l’aperçu et copiez-le manuellement.';
+  }
   sel.removeAllRanges();
 }
 

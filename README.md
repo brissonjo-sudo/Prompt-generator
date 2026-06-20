@@ -7,6 +7,11 @@ quelques choix.
 Pensé pour la **fonction publique** : **100 % local, aucune donnée envoyée** — conforme RGPD
 (privacy by design). Aucune requête réseau, aucun CDN, aucun stockage distant.
 
+**Accessibilité** : interface conçue selon le **RGAA 4.1** (contrastes ≥ 4,5:1, navigation
+clavier et focus visibles, prise en charge des lecteurs d'écran, `prefers-reduced-motion`, lien
+d'évitement). Voir [`DECLARATION-ACCESSIBILITE.md`](DECLARATION-ACCESSIBILITE.md) — gabarit à
+compléter par l'entité qui déploie ; une conformité opposable nécessite un audit par un tiers.
+
 ## Principe directeur — anti-sur-ingénierie
 
 Le risque n'est pas le prompt trop court, c'est le prompt monstrueux et coûteux en tokens.
