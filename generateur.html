@@ -16,14 +16,15 @@
     :root {
       --accent:   #2563eb;
       --accent-h: #1d4ed8;
-      --ok:       #16a34a;
-      --warn:     #d97706;
-      --err:      #dc2626;
+      /* Couleurs de texte assombries pour atteindre ≥ 4,5:1 sur fonds clairs/teintés (RGAA 3.2/3.3). */
+      --ok:       #166534;
+      --warn:     #b45309;
+      --err:      #b91c1c;
       --bg:       #f8fafc;
       --surface:  #ffffff;
       --border:   #e2e8f0;
       --text:     #1e293b;
-      --muted:    #64748b;
+      --muted:    #475569;
       --radius:   10px;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -105,7 +106,7 @@
     .option.verrou .option-nom { color: var(--muted); }
     .badge-noyau {
       display: inline-block; font-size: .64rem; font-weight: 700;
-      background: #eff6ff; color: var(--accent); border-radius: 10px;
+      background: #eff6ff; color: var(--accent-h); border-radius: 10px;
       padding: .05rem .45rem; margin-left: .35rem; vertical-align: middle;
       letter-spacing: .03em;
     }
@@ -119,7 +120,7 @@
     .sous-options .option-nom { font-weight: 500; }
     .lien-skill { color: var(--accent); font-size: .74rem; text-decoration: none; word-break: break-all; }
     .lien-skill:hover { text-decoration: underline; }
-    .url-attente { font-size: .72rem; color: var(--warn); font-style: italic; }
+    .lien-skill:focus-visible { outline: 2px solid var(--accent-h); outline-offset: 2px; }
 
     /* ---- Panneau Skills ---- */
     .skills-hint {
@@ -159,6 +160,7 @@
       white-space: nowrap;
     }
     .btn:disabled { opacity: .4; cursor: default; }
+    .btn:focus-visible { outline: 2px solid var(--accent-h); outline-offset: 2px; }
     .btn-primaire  { background: var(--accent); color: #fff; }
     .btn-primaire:hover:not(:disabled) { background: var(--accent-h); }
     .btn-secondaire { background: #f1f5f9; color: var(--text); border: 1px solid var(--border); }
@@ -173,7 +175,12 @@
       .panneau-corps { padding: .85rem; }
       .panneau-header { flex-direction: column; align-items: flex-start; }
     }
-  </style>
+
+    /* ---- Mouvement réduit (RGAA 13.8 / WCAG 2.3.3) ---- */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
+</style>
 </head>
 <body>
 <div class="app">
@@ -199,7 +206,7 @@
           </div>
         </fieldset>
 
-        <fieldset>
+        <fieldset id="fs-structure">
           <legend>Structure</legend>
           <div class="segmente" role="radiogroup" aria-label="Structure">
             <label><input type="radio" name="structure" value="mono"><span>Mono-fichier</span></label>
@@ -279,10 +286,10 @@
     <section class="panneau" aria-label="Aperçu du prompt">
       <div class="panneau-header">
         <h2>📄 Aperçu du prompt</h2>
-        <span class="compteur ok" id="compteur" aria-live="polite" title="Estimation : caractères ÷ 4">~0 tokens</span>
+        <span class="compteur ok" id="compteur" aria-live="polite" title="Estimation : caractères ÷ 3,5 (FR) ou ÷ 4 (EN)">~0 tokens</span>
       </div>
       <div class="panneau-corps">
-        <pre class="apercu-pre" id="apercu" tabindex="0" aria-live="polite" aria-label="Prompt généré"></pre>
+        <pre class="apercu-pre" id="apercu" tabindex="0" aria-label="Prompt généré"></pre>
         <div class="barre-actions">
           <button class="btn btn-primaire" id="btn-copier"><span aria-hidden="true">📋</span> Copier</button>
           <button class="btn btn-secondaire" id="btn-reset"><span aria-hidden="true">🗑️</span> Réinitialiser</button>
@@ -371,8 +378,8 @@ const BLOCKS = {
     web: {
       tag: 'recherche_web', label: 'Recherche web conditionnelle',
       desc: 'Web seulement pour l’info susceptible d’avoir changé.',
-      fr: "Cherche sur le web uniquement pour les informations susceptibles d'avoir changé : versions de bibliothèques, API récentes, faits postérieurs à ta date de connaissance. Pour les faits stables, réponds directement. Si un vault est actif, consulte-le avant le web.",
-      en: "Search the web only for information likely to have changed: library versions, recent APIs, facts after your knowledge cutoff. For stable facts, answer directly. If a vault is active, consult it before the web."
+      fr: "Cherche sur le web uniquement pour les informations susceptibles d'avoir changé : versions de bibliothèques, API récentes, faits postérieurs à ta date de connaissance. Pour les faits stables, réponds directement.",
+      en: "Search the web only for information likely to have changed: library versions, recent APIs, facts after your knowledge cutoff. For stable facts, answer directly."
     },
     structure: {
       tag: 'structure_projet', label: 'Structure du projet',
@@ -396,7 +403,9 @@ const BLOCKS = {
       tag: 'gouvernance', label: 'Gouvernance / journal de décisions',
       desc: 'Consigner décisions, hypothèses, compromis et options rejetées.',
       fr: "Consigne dans un document unique les décisions d'architecture, les hypothèses retenues, les compromis et les options rejetées (avec la raison du rejet). Tiens-le à jour à chaque décision structurante, pour limiter la dérive sur la durée du projet.",
-      en: "Record in a single document the architecture decisions, the assumptions made, the trade-offs and the rejected options (with the reason for rejection). Keep it up to date at each structuring decision, to limit drift over the life of the project."
+      en: "Record in a single document the architecture decisions, the assumptions made, the trade-offs and the rejected options (with the reason for rejection). Keep it up to date at each structuring decision, to limit drift over the life of the project.",
+      frChat: "Consigne dans un document unique les décisions importantes, les hypothèses retenues, les compromis et les options rejetées (avec la raison du rejet). Tiens-le à jour à chaque décision structurante, pour limiter la dérive sur la durée du projet.",
+      enChat: "Record in a single document the important decisions, the assumptions made, the trade-offs and the rejected options (with the reason for rejection). Keep it up to date at each structuring decision, to limit drift over the life of the project."
     }
   }
 };
@@ -527,6 +536,9 @@ function skillVisible(s) {
 const NOYAU_ORDER  = ['cadrage', 'succes', 'budget', 'plan', 'autoVerif', 'ton'];
 const MODULE_ORDER = ['code', 'vault', 'skills', 'web', 'structure', 'securite', 'gouvernance'];
 
+// Modules dont le sens est propre au code : masqués et non injectés en cible Claude chat.
+const MODULES_CODE_ONLY = new Set(['code', 'structure', 'securite']);
+
 // Préréglages d'envergure : modules pré-cochés (effet en mode « Blocs activables » seulement ;
 // « Prompt complet » inclut tout et ignore l'envergure). Modifiable à la main ensuite.
 const PRESET_ENVERGURE = {
@@ -577,7 +589,19 @@ function texteModule(key, L) {
     t += '\n' + intro + '\n' + lignes.join('\n');
     return t;
   }
-  return BLOCKS.modules[key][L];
+  if (key === 'web') {
+    let t = BLOCKS.modules.web[L];
+    // La consigne vault n'est ajoutée que si le module Vault est réellement actif.
+    if (modulesActifs().includes('vault')) {
+      t += ' ' + (L === 'fr' ? "Si un vault est actif, consulte-le avant le web."
+                             : "If a vault is active, consult it before the web.");
+    }
+    return t;
+  }
+  // Cas général : variante « chat » si elle existe et que la cible est le chat.
+  const b = BLOCKS.modules[key];
+  if (etat.cible === 'chat' && b[L + 'Chat']) return b[L + 'Chat'];
+  return b[L];
 }
 
 // Texte d'un bloc du noyau : variante « chat » si elle existe et que la cible est le chat.
@@ -597,8 +621,8 @@ function modulesActifs() {
   } else {
     actifs = MODULE_ORDER.filter(k => etat.modules.has(k));
   }
-  // Le module Claude Code n'a de sens qu'en cible Code.
-  if (etat.cible !== 'code') actifs = actifs.filter(k => k !== 'code');
+  // Les modules propres au code (Claude Code, structure, sécurité) ne s'injectent pas en chat.
+  if (etat.cible !== 'code') actifs = actifs.filter(k => !MODULES_CODE_ONLY.has(k));
   return actifs;
 }
 
@@ -631,11 +655,18 @@ function assembler() {
     parts.push(emballer(b.tag, texte, fmt));
   }
   const corps = parts.join(fmt === 'xml' ? '\n' : '\n\n');
-  return TACHE_PLACEHOLDER[L] + '\n\n' + corps;
+  const tache = fmt === 'xml'
+    ? '<tache>\n' + TACHE_PLACEHOLDER[L] + '\n</tache>'
+    : TACHE_PLACEHOLDER[L];
+  return tache + '\n\n' + corps;
 }
 
-// Estimation de tokens (≈ caractères ÷ 4).
-function estimerTokens(texte) { return Math.round(texte.length / 4); }
+// Estimation de tokens : le français consomme ~14 % de tokens en plus que l'anglais
+// à contenu égal → ratio plus faible (≈ caractères ÷ 3,5 en FR, ÷ 4 en EN).
+function estimerTokens(texte) {
+  const diviseur = etat.langue === 'fr' ? 3.5 : 4;
+  return Math.round(texte.length / diviseur);
+}
 
 // =====================================================================
 // SECTION 4 : RENDU
@@ -645,18 +676,27 @@ let elApercu, elCompteur, elModulesList;
 function render() {
   const prompt = assembler();
   elApercu.textContent = prompt;
+  elApercu.lang = etat.langue; // le contenu suit la langue du prompt (RGAA 8.7 / WCAG 3.1.2)
 
   const tokens = estimerTokens(prompt);
-  elCompteur.textContent = '~' + tokens + ' tokens';
+  const niveau = tokens < 800 ? 'ok' : tokens <= 1500 ? 'warn' : 'err';
+  // Marqueur distinct par niveau : l'information de coût ne repose pas sur la couleur seule (RGAA 3.1).
+  const marqueur = niveau === 'ok' ? '✓' : niveau === 'warn' ? '⚠' : '⛔';
+  elCompteur.textContent = marqueur + ' ~' + tokens + ' tokens';
   elCompteur.classList.remove('ok', 'warn', 'err');
-  elCompteur.classList.add(tokens < 800 ? 'ok' : tokens <= 1500 ? 'warn' : 'err');
+  elCompteur.classList.add(niveau);
 
   // Afficher / masquer dynamiquement selon l'état.
   const enComplet = etat.mode === 'complet';
+
+  // L'axe Structure (mono/modulaire) est propre au code : masqué en cible Chat.
+  const fsStructure = document.getElementById('fs-structure');
+  if (fsStructure) fsStructure.hidden = (etat.cible !== 'code');
+
   elModulesList.querySelectorAll('[data-module]').forEach(li => {
     const key = li.dataset.module;
-    // Le module Claude Code disparaît en cible Chat.
-    li.hidden = (key === 'code' && etat.cible !== 'code');
+    // Les modules propres au code disparaissent en cible Chat.
+    li.hidden = (MODULES_CODE_ONLY.has(key) && etat.cible !== 'code');
     const cb = li.querySelector('input[data-module-cb]');
     if (cb) {
       cb.disabled = enComplet;              // en mode complet, tout est inclus d'office
